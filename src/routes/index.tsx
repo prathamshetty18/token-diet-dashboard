@@ -478,24 +478,20 @@ function CompressedText({
   sentences: string[];
   keptIndices: number[];
 }) {
-  const keptSet = new Set(keptIndices);
+  const keptSentences = keptIndices
+    .map((i) => sentences[i])
+    .filter(Boolean);
+
   return (
     <p>
-      {sentences.map((sentence, index) => {
-        const isKept = keptSet.has(index);
-        return (
-          <span
-            key={index}
-            className={
-              isKept
-                ? "rounded-sm bg-success/20 px-0.5 font-semibold text-success"
-                : ""
-            }
-          >
-            {sentence}{" "}
-          </span>
-        );
-      })}
+      {keptSentences.map((sentence, index) => (
+        <span
+          key={index}
+          className="rounded-sm bg-success/20 px-0.5 font-semibold text-success"
+        >
+          {sentence}{" "}
+        </span>
+      ))}
     </p>
   );
 }
