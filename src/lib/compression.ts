@@ -89,10 +89,20 @@ function scoreSentence(sentence: string, queryWords: Set<string>): number {
 
   // Reward data-dense content: numbers, proper nouns, technical terms
   if (/\d/.test(sentence)) score += 1.2;
-  if (/%|percent|percentage|ratio|rate|ms|milliseconds|tokens|parameters|model|training|inference|latency|throughput|accuracy|benchmark|dataset/i.test(sentence)) score += 1.5;
+  if (
+    /%|percent|percentage|ratio|rate|ms|milliseconds|tokens|parameters|model|training|inference|latency|throughput|accuracy|benchmark|dataset/i.test(
+      sentence,
+    )
+  )
+    score += 1.5;
 
   // Reward facts and definitions
-  if (/is|are|was|were|means|refers|defined|consists|contains|uses|employs|achieves|reduces|increases|improves|optimizes/i.test(sentence)) score += 0.5;
+  if (
+    /is|are|was|were|means|refers|defined|consists|contains|uses|employs|achieves|reduces|increases|improves|optimizes/i.test(
+      sentence,
+    )
+  )
+    score += 0.5;
 
   // Slight reward for first sentence (often contains the topic)
   // Applied externally
@@ -100,16 +110,13 @@ function scoreSentence(sentence: string, queryWords: Set<string>): number {
   return score;
 }
 
-export function compressContext(
-  rawContext: string,
-  query: string
-): CompressionResult {
+export function compressContext(rawContext: string, query: string): CompressionResult {
   const sentences = splitSentences(rawContext);
   const queryWords = new Set(
     query
       .toLowerCase()
       .match(/\b[a-z]+\b/g)
-      ?.filter((w) => w.length > 2) || []
+      ?.filter((w) => w.length > 2) || [],
   );
 
   const scored = sentences.map((sentence, index) => {
@@ -126,9 +133,7 @@ export function compressContext(
   const kept = sorted.slice(0, keepCount).sort((a, b) => a.index - b.index);
 
   const keptIndices = kept.map((k) => k.index);
-  const removedIndices = sentences
-    .map((_, i) => i)
-    .filter((i) => !keptIndices.includes(i));
+  const removedIndices = sentences.map((_, i) => i).filter((i) => !keptIndices.includes(i));
 
   const compressedText = kept.map((k) => k.sentence).join(" ");
   const originalTokens = estimateTokens(rawContext);
@@ -140,13 +145,13 @@ export function compressContext(
   const baseTraditional = 1200;
   const perTokenTraditional = 2.8;
   const latencyMsTraditional = Math.round(
-    baseTraditional + originalTokens * perTokenTraditional + Math.random() * 400
+    baseTraditional + originalTokens * perTokenTraditional + Math.random() * 400,
   );
 
   const baseOptimized = 180;
   const perTokenOptimized = 0.9;
   const latencyMsOptimized = Math.round(
-    baseOptimized + compressedTokens * perTokenOptimized + Math.random() * 120
+    baseOptimized + compressedTokens * perTokenOptimized + Math.random() * 120,
   );
 
   return {
