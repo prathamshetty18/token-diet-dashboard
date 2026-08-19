@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useServerFn } from "@tanstack/react-start";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,16 +8,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Sparkles, Zap, Clock, Database, ArrowDown, Layers, Scissors, Cpu } from "lucide-react";
 import {
-  compressContext,
+  Sparkles,
+  Zap,
+  Database,
+  ArrowDown,
+  Layers,
+  Scissors,
+  Cpu,
+  Loader2,
+  AlertTriangle,
+  MessageSquareText,
+  Gauge,
+  Timer,
+} from "lucide-react";
+import {
   estimateTokens,
   formatLatency,
   formatTokens,
   splitSentences,
-  type CompressionResult,
 } from "@/lib/compression";
+import { runCompressionPipeline, type PipelineResult } from "@/lib/ai-compress.functions";
 
 const DEFAULT_QUERY = "What is the impact of context length on LLM latency in RAG systems?";
 
@@ -27,22 +39,17 @@ export const Route = createFileRoute("/")({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      {
-        title: "Smart Context Compression Dashboard | Token-Diet",
-      },
+      { title: "Smart Context Compression Dashboard | Token-Diet" },
       {
         name: "description",
         content:
-          "Post-retrieval optimization pipeline that scores RAG sentences, strips filler, and sends dense semantic context to the LLM — saving tokens and reducing latency.",
+          "Live RAG context compression: an LLM scores retrieved sentences, strips filler, and answers from dense context — with real token and latency measurements.",
       },
-      {
-        property: "og:title",
-        content: "Smart Context Compression Dashboard | Token-Diet",
-      },
+      { property: "og:title", content: "Smart Context Compression Dashboard | Token-Diet" },
       {
         property: "og:description",
         content:
-          "Post-retrieval optimization pipeline that scores RAG sentences, strips filler, and sends dense semantic context to the LLM — saving tokens and reducing latency.",
+          "Live RAG context compression: an LLM scores retrieved sentences, strips filler, and answers from dense context — with real token and latency measurements.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -52,75 +59,52 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const compress = useServerFn(runCompressionPipeline);
+
   const [query, setQuery] = useState(DEFAULT_QUERY);
   const [context, setContext] = useState(DEFAULT_CONTEXT);
-  const [result, setResult] = useState<CompressionResult | null>(null);
+  const [result, setResult] = useState<PipelineResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [traditionalProgress, setTraditionalProgress] = useState(0);
-  const [optimizedProgress, setOptimizedProgress] = useState(0);
-  const [traditionalElapsed, setTraditionalElapsed] = useState(0);
-  const [optimizedElapsed, setOptimizedElapsed] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [elapsed, setElapsed] = useState(0);
 
-  const timersRef = useRef<ReturnType<typeof setInterval>[]>([]);
-
-  const clearAllTimers = useCallback(() => {
-    timersRef.current.forEach((t) => clearInterval(t));
-    timersRef.current = [];
-  }, []);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    return () => clearAllTimers();
-  }, [clearAllTimers]);
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
 
-  const handleCompress = useCallback(() => {
-    clearAllTimers();
+  const handleCompress = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
     setIsRunning(true);
     setResult(null);
-    setTraditionalProgress(0);
-    setOptimizedProgress(0);
-    setTraditionalElapsed(0);
-    setOptimizedElapsed(0);
+    setError(null);
+    setElapsed(0);
 
-    // Simulate preprocessing + scoring.
-    setTimeout(() => {
-      const res = compressContext(context, query);
+    const start = Date.now();
+    timerRef.current = setInterval(() => setElapsed(Date.now() - start), 60);
+
+    try {
+      const res = await compress({ data: { query, context } });
       setResult(res);
-
-      const startTime = Date.now();
-
-      const traditional = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        setTraditionalElapsed(elapsed);
-        const progress = Math.min((elapsed / res.latencyMsTraditional) * 100, 100);
-        setTraditionalProgress(progress);
-        if (elapsed >= res.latencyMsTraditional) {
-          clearInterval(traditional);
-        }
-      }, 60);
-
-      const optimized = setInterval(() => {
-        const elapsed = Date.now() - startTime;
-        setOptimizedElapsed(elapsed);
-        const progress = Math.min((elapsed / res.latencyMsOptimized) * 100, 100);
-        setOptimizedProgress(progress);
-        if (elapsed >= res.latencyMsOptimized) {
-          clearInterval(optimized);
-        }
-      }, 60);
-
-      timersRef.current.push(traditional, optimized);
-
-      setTimeout(
-        () => {
-          setIsRunning(false);
-        },
-        Math.max(res.latencyMsTraditional, res.latencyMsOptimized) + 300,
-      );
-    }, 400);
-  }, [clearAllTimers, context, query]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Compression failed. Please try again.");
+    } finally {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setIsRunning(false);
+    }
+  }, [compress, context, query]);
 
   const originalSentences = splitSentences(context);
-  const originalTokens = estimateTokens(context);
+  const originalTokens = result?.traditional.promptTokens ?? estimateTokens(context);
+  const compressedTokens = result?.optimized.promptTokens ?? 0;
+  const tokenSavings = result ? Math.max(0, originalTokens - compressedTokens) : 0;
+  const compressionRatio = result && originalTokens ? Math.round((tokenSavings / originalTokens) * 100) : 0;
+  const latencyDrop = result ? result.traditional.latencyMs - result.optimized.latencyMs : 0;
+
+  const maxLatency = result ? Math.max(result.traditional.latencyMs, result.optimized.latencyMs) : 1;
 
   return (
     <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
@@ -132,15 +116,16 @@ function Index() {
             variant="secondary"
             className="mb-3 px-3 py-1 text-xs font-medium tracking-wide text-primary"
           >
-            <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+            <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             Token-Diet Dynamic Context Compressor
           </Badge>
           <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             Smart Context Compression Dashboard
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground">
-            Strip filler, keep meaning. Reduce token spend and LLM latency by sending only the
-            dense, semantic sentences retrieved from your RAG pipeline.
+            A live LLM pipeline scores your retrieved sentences, strips filler, and answers twice —
+            once from the full context, once from the compressed one — so you can measure the real
+            token and latency savings.
           </p>
         </header>
 
@@ -148,7 +133,7 @@ function Index() {
           <Card className="glow-card border border-border bg-card/80 backdrop-blur lg:col-span-4">
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2 text-base font-semibold">
-                <Database className="h-4 w-4 text-primary" />
+                <Database className="h-4 w-4 text-primary" aria-hidden />
                 Input Pipeline
               </CardTitle>
             </CardHeader>
@@ -178,8 +163,8 @@ function Index() {
                   className="resize-none border-input bg-background/50 text-foreground placeholder:text-muted-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {formatTokens(originalTokens)} estimated tokens · {originalSentences.length}{" "}
-                  sentences
+                  ~{formatTokens(estimateTokens(context))} estimated tokens ·{" "}
+                  {originalSentences.length} sentences
                 </p>
               </div>
               <Button
@@ -187,9 +172,20 @@ function Index() {
                 disabled={isRunning || !context.trim() || !query.trim()}
                 className="w-full bg-gradient-to-r from-primary to-accent text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
               >
-                <Scissors className="mr-2 h-4 w-4" />
-                {isRunning ? "Compressing..." : "Compress Context & Generate"}
+                {isRunning ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                ) : (
+                  <Scissors className="mr-2 h-4 w-4" aria-hidden />
+                )}
+                {isRunning ? `Running pipeline… ${formatLatency(elapsed)}` : "Compress Context & Generate"}
               </Button>
+
+              {error && (
+                <div className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span>{error}</span>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -198,39 +194,35 @@ function Index() {
               <MetricCard
                 icon={ArrowDown}
                 label="Token Savings"
-                value={result ? `${result.compressionRatio}%` : "—"}
+                value={result ? `${compressionRatio}%` : "—"}
                 subtext={
-                  result
-                    ? `${formatTokens(result.tokenSavings)} tokens removed`
-                    : "Waiting for input"
+                  result ? `${formatTokens(tokenSavings)} prompt tokens removed` : "Waiting for run"
                 }
                 accent="success"
               />
               <MetricCard
                 icon={Zap}
                 label="Latency Drop"
-                value={
-                  result ? `-${result.latencyMsTraditional - result.latencyMsOptimized}ms` : "—"
-                }
+                value={result ? `-${latencyDrop}ms` : "—"}
                 subtext={
                   result
-                    ? `${formatLatency(result.latencyMsTraditional)} → ${formatLatency(result.latencyMsOptimized)}`
-                    : "Waiting for input"
+                    ? `${formatLatency(result.traditional.latencyMs)} → ${formatLatency(result.optimized.latencyMs)}`
+                    : "Measured end-to-end"
                 }
                 accent="primary"
               />
               <MetricCard
                 icon={Layers}
                 label="Original Tokens"
-                value={result ? formatTokens(result.originalTokens) : formatTokens(originalTokens)}
-                subtext={"Raw retrieved context"}
+                value={formatTokens(originalTokens)}
+                subtext={result ? "Measured by the model" : "Estimated from raw context"}
                 accent="warning"
               />
               <MetricCard
                 icon={Cpu}
                 label="New Tokens"
-                value={result ? formatTokens(result.compressedTokens) : "—"}
-                subtext={"Dense context passed to LLM"}
+                value={result ? formatTokens(compressedTokens) : "—"}
+                subtext="Dense context sent to the LLM"
                 accent="info"
               />
             </div>
@@ -239,24 +231,24 @@ function Index() {
               <Card className="border border-border bg-card/80 backdrop-blur">
                 <CardContent className="pt-6">
                   <div className="mb-2 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Token usage</span>
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <Gauge className="h-4 w-4" aria-hidden />
+                      Token usage
+                    </span>
                     <span className="font-medium text-foreground">
-                      {formatTokens(result.compressedTokens)} /{" "}
-                      {formatTokens(result.originalTokens)}
+                      {formatTokens(compressedTokens)} / {formatTokens(originalTokens)}
                     </span>
                   </div>
                   <div className="relative h-4 overflow-hidden rounded-full bg-muted">
                     <div
                       className="absolute left-0 top-0 h-full rounded-full bg-primary transition-all duration-700"
-                      style={{
-                        width: `${(result.compressedTokens / result.originalTokens) * 100}%`,
-                      }}
+                      style={{ width: `${(compressedTokens / originalTokens) * 100}%` }}
                     />
                     <div
                       className="absolute top-0 h-full rounded-full bg-success transition-all duration-700"
                       style={{
-                        left: `${(result.compressedTokens / result.originalTokens) * 100}%`,
-                        width: `${(1 - result.compressedTokens / result.originalTokens) * 100}%`,
+                        left: `${(compressedTokens / originalTokens) * 100}%`,
+                        width: `${(1 - compressedTokens / originalTokens) * 100}%`,
                       }}
                     />
                   </div>
@@ -276,104 +268,51 @@ function Index() {
 
             <Card className="border border-border bg-card/80 backdrop-blur">
               <CardHeader className="pb-4">
-                <CardTitle className="text-base font-semibold">Pipeline Comparison</CardTitle>
+                <CardTitle className="flex items-center gap-2 text-base font-semibold">
+                  <Timer className="h-4 w-4 text-primary" aria-hidden />
+                  Pipeline Comparison
+                </CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="grid gap-0 md:grid-cols-2">
-                  <div className="border-b border-border p-5 md:border-b-0 md:border-r">
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted">
-                          <Layers className="h-4 w-4 text-muted-foreground" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-foreground">Traditional RAG</h3>
-                          <p className="text-xs text-muted-foreground">Full context fed to LLM</p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary" className="text-xs">
-                        Slow
-                      </Badge>
-                    </div>
-
-                    <div className="mb-4 rounded-lg border border-border bg-background/50 p-4 text-sm leading-relaxed text-foreground">
-                      {isRunning && !result ? (
-                        <div className="space-y-2">
-                          <div className="h-3 w-3/4 rounded bg-muted" />
-                          <div className="h-3 w-1/2 rounded bg-muted" />
-                          <div className="h-3 w-5/6 rounded bg-muted" />
-                        </div>
-                      ) : (
-                        <p>{context}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Time to first token</span>
-                        <span className="font-medium text-foreground">
-                          {isRunning && !result
-                            ? formatLatency(traditionalElapsed)
-                            : result
-                              ? formatLatency(result.latencyMsTraditional)
-                              : "—"}
-                        </span>
-                      </div>
-                      <Progress
-                        value={isRunning ? traditionalProgress : result ? 100 : 0}
-                        className="h-2 bg-muted"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-5">
-                    <div className="mb-4 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20">
-                          <Zap className="h-4 w-4 text-accent" />
-                        </div>
-                        <div>
-                          <h3 className="text-sm font-semibold text-foreground">Token-Diet RAG</h3>
-                          <p className="text-xs text-muted-foreground">Compressed context only</p>
-                        </div>
-                      </div>
-                      <Badge className="bg-success text-xs text-success-foreground">Fast</Badge>
-                    </div>
-
-                    <div className="mb-4 rounded-lg border border-border bg-background/50 p-4 text-sm leading-relaxed text-foreground">
-                      {isRunning && !result ? (
-                        <div className="space-y-2">
-                          <div className="h-3 w-3/4 rounded bg-muted" />
-                          <div className="h-3 w-1/2 rounded bg-muted" />
-                          <div className="h-3 w-5/6 rounded bg-muted" />
-                        </div>
-                      ) : result ? (
+                  <PipelineColumn
+                    title="Traditional RAG"
+                    subtitle="Full context fed to the LLM"
+                    icon={Layers}
+                    iconWrapClass="bg-muted"
+                    iconClass="text-muted-foreground"
+                    badge={<Badge variant="secondary" className="text-xs">Slow</Badge>}
+                    isRunning={isRunning}
+                    latencyMs={result?.traditional.latencyMs}
+                    progress={result ? (result.traditional.latencyMs / maxLatency) * 100 : 0}
+                    className="border-b border-border md:border-b-0 md:border-r"
+                    contextNode={<p>{context}</p>}
+                    answer={result?.traditional.answer}
+                  />
+                  <PipelineColumn
+                    title="Token-Diet RAG"
+                    subtitle="Compressed context only"
+                    icon={Zap}
+                    iconWrapClass="bg-accent/20"
+                    iconClass="text-accent"
+                    badge={<Badge className="bg-success text-xs text-success-foreground">Fast</Badge>}
+                    isRunning={isRunning}
+                    latencyMs={result?.optimized.latencyMs}
+                    progress={result ? (result.optimized.latencyMs / maxLatency) * 100 : 0}
+                    contextNode={
+                      result ? (
                         <CompressedText
                           sentences={originalSentences}
                           keptIndices={result.keptIndices}
                         />
                       ) : (
-                        <p className="text-muted-foreground">Compressed output will appear here.</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">Time to first token</span>
-                        <span className="font-medium text-foreground">
-                          {isRunning && !result
-                            ? formatLatency(optimizedElapsed)
-                            : result
-                              ? formatLatency(result.latencyMsOptimized)
-                              : "—"}
-                        </span>
-                      </div>
-                      <Progress
-                        value={isRunning ? optimizedProgress : result ? 100 : 0}
-                        className="h-2 bg-muted"
-                      />
-                    </div>
-                  </div>
+                        <p className="text-muted-foreground">
+                          Compressed output will appear here.
+                        </p>
+                      )
+                    }
+                    answer={result?.optimized.answer}
+                  />
                 </div>
               </CardContent>
             </Card>
@@ -382,11 +321,96 @@ function Index() {
 
         <footer className="mt-8 text-center text-xs text-muted-foreground">
           <p>
-            Token-Diet is a simulated demo. Latency and compression metrics are approximated for
-            illustration.
+            Token counts and latencies are measured from real model calls made through Lovable AI.
           </p>
         </footer>
       </main>
+    </div>
+  );
+}
+
+function PipelineColumn({
+  title,
+  subtitle,
+  icon: Icon,
+  iconWrapClass,
+  iconClass,
+  badge,
+  isRunning,
+  latencyMs,
+  progress,
+  className = "",
+  contextNode,
+  answer,
+}: {
+  title: string;
+  subtitle: string;
+  icon: React.ElementType;
+  iconWrapClass: string;
+  iconClass: string;
+  badge: React.ReactNode;
+  isRunning: boolean;
+  latencyMs?: number;
+  progress: number;
+  className?: string;
+  contextNode: React.ReactNode;
+  answer?: string;
+}) {
+  return (
+    <div className={`p-5 ${className}`}>
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div
+            className={`flex h-8 w-8 items-center justify-center rounded-lg ${iconWrapClass}`}
+          >
+            <Icon className={`h-4 w-4 ${iconClass}`} aria-hidden />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <p className="text-xs text-muted-foreground">{subtitle}</p>
+          </div>
+        </div>
+        {badge}
+      </div>
+
+      <div className="mb-4 max-h-52 overflow-y-auto rounded-lg border border-border bg-background/50 p-4 text-sm leading-relaxed text-foreground">
+        {isRunning ? (
+          <div className="space-y-2 animate-pulse">
+            <div className="h-3 w-3/4 rounded bg-muted" />
+            <div className="h-3 w-1/2 rounded bg-muted" />
+            <div className="h-3 w-5/6 rounded bg-muted" />
+          </div>
+        ) : (
+          contextNode
+        )}
+      </div>
+
+      <div className="mb-4 rounded-lg border border-border bg-card/60 p-4">
+        <p className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+          Model answer
+        </p>
+        {isRunning ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            Generating…
+          </p>
+        ) : (
+          <p className="text-sm leading-relaxed text-foreground">
+            {answer ?? <span className="text-muted-foreground">Run the pipeline to compare answers.</span>}
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">End-to-end response time</span>
+          <span className="font-medium text-foreground">
+            {latencyMs !== undefined ? formatLatency(latencyMs) : "—"}
+          </span>
+        </div>
+        <Progress value={isRunning ? 0 : progress} className="h-2 bg-muted" />
+      </div>
     </div>
   );
 }
@@ -423,7 +447,7 @@ function MetricCard({
           <div
             className={`flex h-9 w-9 items-center justify-center rounded-lg ${accentClasses[accent]}`}
           >
-            <Icon className="h-5 w-5" />
+            <Icon className="h-5 w-5" aria-hidden />
           </div>
         </div>
       </CardContent>
