@@ -8,16 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import {
-  Sparkles,
-  Zap,
-  Clock,
-  Database,
-  ArrowDown,
-  Layers,
-  Scissors,
-  Cpu,
-} from "lucide-react";
+import { Sparkles, Zap, Clock, Database, ArrowDown, Layers, Scissors, Cpu } from "lucide-react";
 import {
   compressContext,
   estimateTokens,
@@ -27,8 +18,7 @@ import {
   type CompressionResult,
 } from "@/lib/compression";
 
-const DEFAULT_QUERY =
-  "What is the impact of context length on LLM latency in RAG systems?";
+const DEFAULT_QUERY = "What is the impact of context length on LLM latency in RAG systems?";
 
 const DEFAULT_CONTEXT = `Large language models process input tokens sequentially through a transformer architecture, making context length a primary cost driver for inference. Retrieval-Augmented Generation systems retrieve candidate documents from a vector database and concatenate them into a long prompt. In many production deployments, the retrieved context contains redundant explanations, hedging language, and transitional filler that do not contribute to answering the user query. Studies show that up to 60% of retrieved tokens can be removed without degrading answer quality. Context compression pipelines score sentences by semantic relevance, lexical density, and factual content. Sentences that contain numbers, named entities, technical terms, and explicit definitions receive higher retention scores. Conversely, sentences starting with filler phrases such as "It is important to note" or "In conclusion" are penalized and removed. The compressed context is then passed to the LLM, which reduces the number of forward passes and lowers time-to-first-token. Latency improvements of 30-50% are commonly observed when the input context is cut by half. Token-Diet additionally preserves the semantic flow of the retained sentences so that the answer remains coherent and grounded. The retained context acts as a dynamic, query-specific filter rather than a static truncation strategy. This is especially useful for long-document question answering and customer-support knowledge bases. Reducing context also decreases the memory pressure on the KV cache, allowing higher throughput per GPU. The scoring function is lightweight and runs on the CPU before the LLM call, adding negligible overhead to the pipeline. Overall, context-aware compression improves both the economics and responsiveness of deployed RAG applications.`;
 
@@ -120,9 +110,12 @@ function Index() {
 
       timersRef.current.push(traditional, optimized);
 
-      setTimeout(() => {
-        setIsRunning(false);
-      }, Math.max(res.latencyMsTraditional, res.latencyMsOptimized) + 300);
+      setTimeout(
+        () => {
+          setIsRunning(false);
+        },
+        Math.max(res.latencyMsTraditional, res.latencyMsOptimized) + 300,
+      );
     }, 400);
   }, [clearAllTimers, context, query]);
 
@@ -146,9 +139,8 @@ function Index() {
             Smart Context Compression Dashboard
           </h1>
           <p className="mx-auto mt-3 max-w-2xl text-base text-muted-foreground">
-            Strip filler, keep meaning. Reduce token spend and LLM latency by
-            sending only the dense, semantic sentences retrieved from your RAG
-            pipeline.
+            Strip filler, keep meaning. Reduce token spend and LLM latency by sending only the
+            dense, semantic sentences retrieved from your RAG pipeline.
           </p>
         </header>
 
@@ -162,10 +154,7 @@ function Index() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label
-                  htmlFor="query"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="query" className="text-sm font-medium text-foreground">
                   User Query
                 </label>
                 <Input
@@ -177,10 +166,7 @@ function Index() {
                 />
               </div>
               <div className="space-y-2">
-                <label
-                  htmlFor="context"
-                  className="text-sm font-medium text-foreground"
-                >
+                <label htmlFor="context" className="text-sm font-medium text-foreground">
                   Raw Retrieved RAG Context
                 </label>
                 <Textarea
@@ -192,8 +178,8 @@ function Index() {
                   className="resize-none border-input bg-background/50 text-foreground placeholder:text-muted-foreground"
                 />
                 <p className="text-xs text-muted-foreground">
-                  {formatTokens(originalTokens)} estimated tokens ·{" "}
-                  {originalSentences.length} sentences
+                  {formatTokens(originalTokens)} estimated tokens · {originalSentences.length}{" "}
+                  sentences
                 </p>
               </div>
               <Button
@@ -212,9 +198,7 @@ function Index() {
               <MetricCard
                 icon={ArrowDown}
                 label="Token Savings"
-                value={
-                  result ? `${result.compressionRatio}%` : "—"
-                }
+                value={result ? `${result.compressionRatio}%` : "—"}
                 subtext={
                   result
                     ? `${formatTokens(result.tokenSavings)} tokens removed`
@@ -226,9 +210,7 @@ function Index() {
                 icon={Zap}
                 label="Latency Drop"
                 value={
-                  result
-                    ? `-${result.latencyMsTraditional - result.latencyMsOptimized}ms`
-                    : "—"
+                  result ? `-${result.latencyMsTraditional - result.latencyMsOptimized}ms` : "—"
                 }
                 subtext={
                   result
@@ -247,9 +229,7 @@ function Index() {
               <MetricCard
                 icon={Cpu}
                 label="New Tokens"
-                value={
-                  result ? formatTokens(result.compressedTokens) : "—"
-                }
+                value={result ? formatTokens(result.compressedTokens) : "—"}
                 subtext={"Dense context passed to LLM"}
                 accent="info"
               />
@@ -296,9 +276,7 @@ function Index() {
 
             <Card className="border border-border bg-card/80 backdrop-blur">
               <CardHeader className="pb-4">
-                <CardTitle className="text-base font-semibold">
-                  Pipeline Comparison
-                </CardTitle>
+                <CardTitle className="text-base font-semibold">Pipeline Comparison</CardTitle>
               </CardHeader>
               <CardContent className="p-0">
                 <div className="grid gap-0 md:grid-cols-2">
@@ -309,12 +287,8 @@ function Index() {
                           <Layers className="h-4 w-4 text-muted-foreground" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-semibold text-foreground">
-                            Traditional RAG
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            Full context fed to LLM
-                          </p>
+                          <h3 className="text-sm font-semibold text-foreground">Traditional RAG</h3>
+                          <p className="text-xs text-muted-foreground">Full context fed to LLM</p>
                         </div>
                       </div>
                       <Badge variant="secondary" className="text-xs">
@@ -336,9 +310,7 @@ function Index() {
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Time to first token
-                        </span>
+                        <span className="text-muted-foreground">Time to first token</span>
                         <span className="font-medium text-foreground">
                           {isRunning && !result
                             ? formatLatency(traditionalElapsed)
@@ -361,17 +333,11 @@ function Index() {
                           <Zap className="h-4 w-4 text-accent" />
                         </div>
                         <div>
-                          <h3 className="text-sm font-semibold text-foreground">
-                            Token-Diet RAG
-                          </h3>
-                          <p className="text-xs text-muted-foreground">
-                            Compressed context only
-                          </p>
+                          <h3 className="text-sm font-semibold text-foreground">Token-Diet RAG</h3>
+                          <p className="text-xs text-muted-foreground">Compressed context only</p>
                         </div>
                       </div>
-                      <Badge className="bg-success text-xs text-success-foreground">
-                        Fast
-                      </Badge>
+                      <Badge className="bg-success text-xs text-success-foreground">Fast</Badge>
                     </div>
 
                     <div className="mb-4 rounded-lg border border-border bg-background/50 p-4 text-sm leading-relaxed text-foreground">
@@ -387,17 +353,13 @@ function Index() {
                           keptIndices={result.keptIndices}
                         />
                       ) : (
-                        <p className="text-muted-foreground">
-                          Compressed output will appear here.
-                        </p>
+                        <p className="text-muted-foreground">Compressed output will appear here.</p>
                       )}
                     </div>
 
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-muted-foreground">
-                          Time to first token
-                        </span>
+                        <span className="text-muted-foreground">Time to first token</span>
                         <span className="font-medium text-foreground">
                           {isRunning && !result
                             ? formatLatency(optimizedElapsed)
@@ -420,8 +382,8 @@ function Index() {
 
         <footer className="mt-8 text-center text-xs text-muted-foreground">
           <p>
-            Token-Diet is a simulated demo. Latency and compression metrics are
-            approximated for illustration.
+            Token-Diet is a simulated demo. Latency and compression metrics are approximated for
+            illustration.
           </p>
         </footer>
       </main>
@@ -455,9 +417,7 @@ function MetricCard({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">
-              {value}
-            </p>
+            <p className="mt-1 text-2xl font-bold tracking-tight text-foreground">{value}</p>
             <p className="mt-1 text-xs text-muted-foreground">{subtext}</p>
           </div>
           <div
@@ -478,17 +438,12 @@ function CompressedText({
   sentences: string[];
   keptIndices: number[];
 }) {
-  const keptSentences = keptIndices
-    .map((i) => sentences[i])
-    .filter(Boolean);
+  const keptSentences = keptIndices.map((i) => sentences[i]).filter(Boolean);
 
   return (
     <p>
       {keptSentences.map((sentence, index) => (
-        <span
-          key={index}
-          className="rounded-sm bg-success/20 px-0.5 font-semibold text-success"
-        >
+        <span key={index} className="rounded-sm bg-success/20 px-0.5 font-semibold text-success">
           {sentence}{" "}
         </span>
       ))}
